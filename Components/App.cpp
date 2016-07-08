@@ -585,6 +585,12 @@ Status App::customBtnCallback(const IEventArgs& evtArgs, const tstring iconPath)
 {
 	const WinEventArgs& args = static_cast<const WinEventArgs&>(evtArgs);
 
+	if (customLayouts.size() >= 5) {
+		MessageBox(NULL, _T("Maximum custom layouts created"),
+			_T(""), MB_OK | MB_ICONINFORMATION);
+		return S_SUCCESS;
+	}
+
 	// Detect all wnds open
 	openWnds.clear();
 
