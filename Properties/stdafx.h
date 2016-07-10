@@ -76,7 +76,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "Platforms/ScheduleAppComponent.h"
 #include "Platforms/AutoUpdateComponent.h"
 #include "Platforms/TooltipComponent.h"
-#include "Platforms/ImageBtnComponent.h"
+//#include "Platforms/ImageBtnComponent.h"
 #include "Components/BorderWindowComponent.h"
 #include "Models/HwndInfo.h"
 #include "Components/App.h"

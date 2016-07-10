@@ -52,13 +52,10 @@ protected:
 
 	App();
 
-	Status onTrayIconInteraction(const IEventArgs& evtArgs);
 	Status showWindow(const IEventArgs& evtArgs=NULL_ARGS);
 	Status hideWindow(const IEventArgs& evtArgs = NULL_ARGS);
-	Status onKillFocus(const IEventArgs& evtArgs);
 	bool isAltTabWindow(HWND hwnd);
 
-	Status initMenu();
 	Status gridBtnCallback(const IEventArgs& evtArgs);
 	Status columnsBtnCallback(const IEventArgs& evtArgs);
 	Status customBtnCallback(const IEventArgs& evtArgs, const tstring iconPath);
@@ -66,20 +63,21 @@ protected:
 	Status onCustomBtnUp(const IEventArgs& evtArgs);
 	Status onImageSelectorMouseLeave(const IEventArgs& evtArgs);
 	Status onLayoutBtnClick(const IEventArgs& evtArgs, int custLayoutIndex);
+	Status onTrayIconInteraction(const IEventArgs& evtArgs);
+	Status onKillFocus(const IEventArgs& evtArgs);
 
 	Status readINIFile();
 	Status writeINIFile(const CustomLayout& layout);
+	Status initMenu();
 	Status loadCustomLayoutIcons();
+	Status loadCustomLayouts();
 
 private:
-	Status IDB_GRID = Status::registerState(_T("Grid Button"));
-	Status IDB_COLS = Status::registerState(_T("Columns Button"));
-	Status IDB_CTM = Status::registerState(_T("Custom Button"));
+	Status IDB_GRID			= Status::registerState(_T("Grid Button"));
+	Status IDB_COLS			= Status::registerState(_T("Columns Button"));
+	Status IDB_CTM			= Status::registerState(_T("Custom Button"));
 
 	/*const*/ tstring INIFilePath;
-	std::vector <HWND> openWnds;
-	std::vector <CustomLayout> customLayouts;
-	std::vector<HGDIOBJ> gdiObjects;
 	SIZE btnSize;
 	//HWND layoutBtn;
 	HWND gridBtn;
@@ -88,6 +86,9 @@ private:
 	HWND voidBtn;
 	HMENU hMenu;
 	bool skipMinimisedHwnds;
+	std::vector <HWND> openWnds;
+	std::vector <CustomLayout> customLayouts;
+	std::vector <HGDIOBJ> gdiObjects;
 	std::shared_ptr<HorzListBoxComponent> horizListBoxCmp;
 	std::shared_ptr<VertListBoxComponent> vertListBoxCmp;
 	std::shared_ptr<SystemTrayComponent> sysTrayCmp;

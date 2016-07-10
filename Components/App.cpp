@@ -40,10 +40,9 @@ BOOL CALLBACK App::enumWindows(HWND hwnd, LPARAM lParam)
 {
 	App* app = (App*)lParam;
 
-	if (!app->isAltTabWindow(hwnd))
-		return TRUE;
+	if (app->isAltTabWindow(hwnd))
+		app->openWnds.push_back(hwnd);
 
-	app->openWnds.push_back(hwnd);
 	return TRUE;
 }
 
@@ -52,13 +51,13 @@ App::App()
 	: Win32App()/*, 
 	INIFilePath(INIFilePath)*/
 {
-	wndDimensions = RECT{ -400, -400, 420, 126 };
-	bkColour = CreateSolidBrush(RGB(50, 50, 50));
-	wndTitle = _T("Window Tiler");
-	wndFlags = WS_EX_TOOLWINDOW | WS_POPUP;
-	iconID = IDI_APP;
-	smallIconID = IDI_SMALL;
-	skipMinimisedHwnds = true;
+	wndDimensions		= RECT{ -400, -400, 420, 126 };
+	bkColour			= CreateSolidBrush(RGB(50, 50, 50));
+	wndTitle			= _T("Window Tiler");
+	wndFlags			= WS_EX_TOOLWINDOW | WS_POPUP;
+	iconID				= IDI_APP;
+	smallIconID			= IDI_SMALL;
+	skipMinimisedHwnds	= true;
 	gdiObjects.push_back(bkColour);
 
 	TCHAR szPath[MAX_PATH];
@@ -80,47 +79,45 @@ App::~App()
 Status App::init(const IEventArgs& evtArgs)
 {
 	const Win32AppInit& initArgs = static_cast<const Win32AppInit&>(evtArgs);
+	
 	readINIFile();
-	output(_T("***Size: %d\n"), customLayouts.size());
+
+	#ifndef _DEBUG
+		auto sCmp = addComponent<ScheduleAppComponent>(app, _T("WindowTilerCBA"));
+
+		char exePath[MAX_PATH];
+		GetModuleFileNameA(NULL, exePath, MAX_PATH);
+		std::string exePathStr = std::string(exePath);
+		std::string exeDir = exePathStr.substr(0, exePathStr.rfind("\\"));
+		addComponent<AutoUpdateComponent>(app, "http://windowtiler.soribo.com.au/version.php?application=window-tiler",
+			"http://windowtiler.soribo.com.au/WindowTiler.exe", 
+			exeDir+"\\updated.exe",
+			WStringToString(INIFilePath));
+	#endif // _DEBUG
 
 	HBRUSH grayBrush = CreateSolidBrush(RGB(50, 50, 50));
 	gdiObjects.push_back(grayBrush);
 
-	#ifndef _DEBUG
-	auto sCmp = addComponent<ScheduleAppComponent>(app, _T("WindowTilerCBA"));
-	//sCmp->unregisterScheduledTask();
-	char exePath[MAX_PATH];
-	GetModuleFileNameA(NULL, exePath, MAX_PATH);
-	std::string exePathStr = std::string(exePath);
-	std::string exeDir = exePathStr.substr(0, exePathStr.rfind("\\"));
-	addComponent<AutoUpdateComponent>(app, "http://windowtiler.soribo.com.au/version.php?application=window-tiler",
-		"http://windowtiler.soribo.com.au/WindowTiler.exe", 
-		exeDir+"\\updated.exe",
-		WStringToString(INIFilePath));
-	#endif // _DEBUG
-
+	// Add pre-init components. TODO: edit CBA API to provide pre-init create components function
 	addComponent<DPIAwareComponent>(app);
-	//auto imgBtnCmp = addComponent<ImageBtnComponent>(app);
-	auto tooltipCmp = addComponent<TooltipComponent>(app);
-	auto dispatchCmp = addComponent<DispatchWindowComponent>(app);
-	sysTrayCmp = addComponent<SystemTrayComponent>(app, _T("images/small.ico"), _T("Window Tiler"));
-
+	auto tooltipCmp			= addComponent<TooltipComponent>(app);
+	auto dispatchCmp		= addComponent<DispatchWindowComponent>(app);
+	sysTrayCmp				= addComponent<SystemTrayComponent>(app, _T("images/small.ico"), _T("Window Tiler"));
 	addComponent<BorderWindowComponent>(app, RECT{6, 6, 408, 114});
-	horizListBoxCmp = addComponent<HorzListBoxComponent>(app, RECT{ 18, 16,
-		386, 94 }, grayBrush, 8, 2, true);
-	vertListBoxCmp = addComponent<VertListBoxComponent>(app, RECT{ 0, 0,
-		96, 300 }, grayBrush, 3, 8, true, WS_POPUP);
+	horizListBoxCmp			= addComponent<HorzListBoxComponent>(app, RECT{ 18, 16,
+								386, 94 }, grayBrush, 8, 2, true);
+	vertListBoxCmp			= addComponent<VertListBoxComponent>(app, RECT{ 0, 0,
+								96, 300 }, grayBrush, 3, 8, true, WS_POPUP);
 	vertListBoxCmp->setScroller<HoverScrollerComponent>(IScrollerComponent::ScrollDirection::SCROLL_VERT);
 
 	Win32App::init(evtArgs);
 
-	btnSize = SIZE { DPIAwareComponent::scaleUnits(90 ), DPIAwareComponent::scaleUnits(90) };
-	HWND horizLb = horizListBoxCmp->getHwnd();
-	HWND vertLb = vertListBoxCmp->getHwnd();
-	
-	ShowWindow(vertLb, SW_HIDE);
 	DPIAwareComponent::scaleRect(wndDimensions);
 	SetWindowPos(hwnd, 0, wndDimensions.left, wndDimensions.top, wndDimensions.right, wndDimensions.bottom, 0);
+	btnSize					= SIZE { DPIAwareComponent::scaleUnits(90 ), DPIAwareComponent::scaleUnits(90) };
+	HWND horizLb			= horizListBoxCmp->getHwnd();
+	HWND vertLb				= vertListBoxCmp->getHwnd();
+	ShowWindow(vertLb, SW_HIDE);
 
 	HBITMAP gridBm = (HBITMAP)LoadImage(NULL,
 		_T("Images/btn1.bmp"), IMAGE_BITMAP, btnSize.cx, btnSize.cy,
@@ -153,8 +150,6 @@ Status App::init(const IEventArgs& evtArgs)
 		btnSize.cx, btnSize.cy,
 		horizLb, (HMENU)IDB_CTM.state, hinstance, 0); 
 
-	//imgBtnCmp->registerBtnImages(gridBtn, gridBm, colsBm, customBm);
-
 	tooltipCmp->addTooltip(gridBtn, _T("Arrange windows in grid pattern"));
 	tooltipCmp->addTooltip(columnBtn, _T("Arrange windows in columns"));
 	tooltipCmp->addTooltip(customBtn, _T("Create new custom layout from current window arrangement"));
@@ -165,32 +160,7 @@ Status App::init(const IEventArgs& evtArgs)
 	horizListBoxCmp->addChild(gridBtn);
 	horizListBoxCmp->addChild(columnBtn);
 
-	// Load Custom layout buttons
-	for (int i = 0; i < customLayouts.size(); i++) {
-		Status custMsg = Status::registerState(_T("Custom Layout"));
-		HWND custLytBtn = CreateWindowEx(WS_EX_TRANSPARENT, _T("BUTTON"), 
-			_T("Custom1"), 
-			WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON | BS_VCENTER | BS_BITMAP,
-			0, 0,
-			btnSize.cx, btnSize.cy,
-			horizLb, (HMENU)custMsg.state, hinstance, 0);
-
-		output(_T("img path: %s\n"), customLayouts[i].layoutIconPath);
-		HBITMAP bmp = (HBITMAP)::LoadImage(NULL,
-			customLayouts[i].layoutIconPath, IMAGE_BITMAP, btnSize.cx, btnSize.cy,
-			LR_LOADFROMFILE | LR_CREATEDIBSECTION | LR_DEFAULTSIZE | LR_VGACOLOR | LR_SHARED);
-
-		gdiObjects.push_back(bmp);
-		horizListBoxCmp->addChild(custLytBtn);
-		SendMessage(custLytBtn, BM_SETIMAGE, IMAGE_BITMAP, (LPARAM)bmp);
-
-		registerEventLambda<App>(custMsg, 
-			[i, this](const IEventArgs& evtArgs)->Status {
-
-			return this->onLayoutBtnClick(evtArgs, i);
-		});
-	}
-
+	loadCustomLayouts();
 	loadCustomLayoutIcons();
 
 	horizListBoxCmp->addChild(customBtn);
@@ -217,14 +187,12 @@ Status App::init(const IEventArgs& evtArgs)
 	registerEvent(IDB_COLS.state, &App::columnsBtnCallback);
 	registerEvent(DispatchWindowComponent::translateMessage(customBtn, WM_LBUTTONDOWN), &App::onCustomBtnDown);
 	registerEvent(DispatchWindowComponent::translateMessage(customBtn, WM_LBUTTONUP), &App::onCustomBtnUp);
-	//registerEvent(DispatchWindowComponent::translateMessage(vertLb, WM_MOUSELEAVE), &App::onImageSelectorMouseLeave);
-	//registerEvent(DispatchWindowComponent::translateMessage(vertLb, WM_MOUSEMOVE), &App::onImageSelectorMouseLeave);
-	//registerEvent(DispatchWindowComponent::translateMessage(vertLb, WM_ACTIVATEAPP), &App::onImageSelectorMouseLeave);
 	registerEvent(WM_ACTIVATEAPP, &App::onKillFocus);
 	//registerEvent(WM_KILLFOCUS, &App::onKillFocus);
 
 	initMenu();
 
+	// Dont show window on scheduled startup load
 	tstring cmdArgs = initArgs.cmdLine;
 	if (cmdArgs.find(_T("/scheduledstart")) != tstring::npos)
 		hideWindow();
@@ -258,7 +226,6 @@ Status App::onTrayIconInteraction(const IEventArgs& evtArgs)
 	if (args.wParam != sysTrayCmp->trayIconID.state)
 		return S_SUCCESS;
 	
-	//output(_T("M: %d\n"), args.lParam);
 	if (args.lParam == WM_LBUTTONDOWN) {
 		if (IsWindowVisible(hwnd))
 			hideWindow();
@@ -276,7 +243,7 @@ Status App::onTrayIconInteraction(const IEventArgs& evtArgs)
 		if (clicked == WM_MENU_REPORT_BUG.state)
 		{
 			output(_T("Report\n"));
-			ShellExecute(NULL, _T("open"), _T("http://windowtiler.soribo.com.au/report"), NULL, NULL, SW_SHOWNORMAL);
+			ShellExecute(NULL, _T("open"), _T("http://windowtiler.soribo.com.au/report-a-bug/"), NULL, NULL, SW_SHOWNORMAL);
 		}
 		else if (clicked == WM_MENU_DONATE.state)
 		{
@@ -287,7 +254,6 @@ Status App::onTrayIconInteraction(const IEventArgs& evtArgs)
 		{
 			output(_T("Exit\n"));
 			PostMessage(args.hwnd, WM_CLOSE, 0, 0);
-			//PostQuitMessage(0);
 		}
 	}
 
@@ -297,14 +263,13 @@ Status App::onTrayIconInteraction(const IEventArgs& evtArgs)
 Status App::showWindow(const IEventArgs& evtArgs)
 {
 	int x, y, buffer = 20;
-	
 	RECT wndDim, screenDim;
+	APPBARDATA barData{ 0 };
+	barData.cbSize = sizeof(APPBARDATA);
+
 	GetWindowRect(hwnd, &wndDim);
 	util->getClientRect(screenDim);
-
-	APPBARDATA barData {0};
-	barData.cbSize = sizeof(APPBARDATA);
-	UINT_PTR res = SHAppBarMessage(ABM_GETTASKBARPOS, &barData);
+	SHAppBarMessage(ABM_GETTASKBARPOS, &barData);
 
 	switch (barData.uEdge)
 	{
@@ -355,10 +320,11 @@ Status App::onKillFocus(const IEventArgs& evtArgs)
 {
 	const WinEventArgs& args = static_cast<const WinEventArgs&>(evtArgs);
 
-	/*if (!IsChild(args.hwnd, (HWND)args.wParam))
+	/* Handle WM_KILLFOCUS
+	if (!IsChild(args.hwnd, (HWND)args.wParam))
 		hideWindow(evtArgs);*/
 
-	output(_T("M: %d, %d\n"), args.lParam, args.wParam == TRUE);
+	// HANDLE WM_ACTIVATEAPP
 	// if being deactived
 	if (args.wParam == FALSE)
 		hideWindow(evtArgs);
@@ -368,6 +334,7 @@ Status App::onKillFocus(const IEventArgs& evtArgs)
 
 bool App::isAltTabWindow(HWND hwnd)
 {
+	#pragma message("Bug: currently misses some top level windows incl Piriform CCleaner.")
 	TITLEBARINFO ti;
 	HWND hwndTry, hwndWalk = NULL;
 
@@ -422,27 +389,25 @@ Status App::gridBtnCallback(const IEventArgs& evtArgs)
 
 	if (message != BN_CLICKED)
 		return S_SUCCESS;
-
-	output(_T("gridBtnCallback\n"));
 	
+	// Identify top-level HWNDs
 	openWnds.clear();
-	BOOL res = EnumWindows(enumWindows, (LPARAM)this);
+	EnumWindows(enumWindows, (LPARAM)this);
 
 	if (openWnds.empty())
 		return S_SUCCESS;
 
 	RECT screenDim;
 	util->getClientRect(screenDim);
+	int index			= 0;
+	int x				= 0;
+	int y				= 0;
+	int evenWnds		= (openWnds.size() % 2 == 0) ? openWnds.size() : openWnds.size() + 1;
+	int nRows			= (int)floor(sqrt(evenWnds));
+	int nCols			= (int)ceil(evenWnds / nRows);
+	SIZE gridDim		= { (screenDim.right - screenDim.left) / nCols,
+							(screenDim.bottom - screenDim.top) / nRows };
 
-	int evenWnds = (openWnds.size() % 2 == 0) ? openWnds.size() : openWnds.size() + 1;
-	int nRows = (int)floor(sqrt(evenWnds));
-	int nCols = (int)ceil(evenWnds / nRows);
-	SIZE gridDim = { (screenDim.right - screenDim.left) / nCols,
-		(screenDim.bottom - screenDim.top) / nRows };
-	int x = 0;
-	int y = 0;
-
-	int index = 0;
 	for (int row = 0; row < nRows; row++) {
 		for (int col = 0; col < nCols; col++) {
 
@@ -481,6 +446,7 @@ Status App::columnsBtnCallback(const IEventArgs& evtArgs)
 	if (message != BN_CLICKED)
 		return S_SUCCESS;
 
+	// Identify top-level HWNDs
 	openWnds.clear();
 	BOOL res = EnumWindows(enumWindows, (LPARAM)this);
 
@@ -489,13 +455,12 @@ Status App::columnsBtnCallback(const IEventArgs& evtArgs)
 
 	RECT screenDim;
 	util->getClientRect(screenDim);
-
-	int nCols = openWnds.size();
-	SIZE gridDim = { (screenDim.right - screenDim.left) / nCols,
-		screenDim.bottom - screenDim.top };
-	int x = 0;
-	int y = 0;
-
+	int x					= 0;
+	int y					= 0;
+	int nCols				= openWnds.size();
+	SIZE gridDim			= { (screenDim.right - screenDim.left) / nCols,
+								screenDim.bottom - screenDim.top };
+	
 	for (int i = 0; i < openWnds.size(); i++) {
 
 		WINDOWPLACEMENT wndPlacement;
@@ -512,31 +477,25 @@ Status App::columnsBtnCallback(const IEventArgs& evtArgs)
 
 Status App::onCustomBtnDown(const IEventArgs& evtArgs)
 {
-	outputStr("Showing listbox\n");
 	const WinEventArgs& args = static_cast<const WinEventArgs&>(evtArgs);
 
-	output(_T("V: %x, H: %x, C: %x\n"), GetDlgCtrlID(vertListBoxCmp->getHwnd()), GetDlgCtrlID(horizListBoxCmp->getHwnd()), GetDlgCtrlID(customBtn));
-	APPBARDATA barData{ 0 };
-	barData.cbSize = sizeof(APPBARDATA);
-	UINT_PTR res = SHAppBarMessage(ABM_GETTASKBARPOS, &barData);
-	HWND vertLb = vertListBoxCmp->getHwnd();
 	RECT btnDim, vlbDim;
+	APPBARDATA barData{ 0 };
+	barData.cbSize			= sizeof(APPBARDATA);
+	HWND vertLb				= vertListBoxCmp->getHwnd();
 	GetWindowRect((HWND)args.hwnd, &btnDim);
 	GetWindowRect(vertLb, &vlbDim);
+	SHAppBarMessage(ABM_GETTASKBARPOS, &barData);
 
-	int btnW = btnDim.right - btnDim.left;
-	int lbW = vlbDim.right - vlbDim.left;
-	int lbH = vlbDim.bottom - vlbDim.top;
-	int xPos = btnDim.left + ((btnW - lbW) / 2);
-	int yPos = 0;
+	int btnW			= btnDim.right - btnDim.left;
+	int lbW				= vlbDim.right - vlbDim.left;
+	int lbH				= vlbDim.bottom - vlbDim.top;
+	int xPos			= btnDim.left + ((btnW - lbW) / 2);
+	int yPos			= 0;
 
 	switch (barData.uEdge)
 	{
 	case ABE_LEFT:
-	{
-		yPos = btnDim.top - lbH - 10;
-	}
-	break;
 	case ABE_RIGHT:
 	{
 		yPos = btnDim.top - lbH - 10;
@@ -564,8 +523,6 @@ Status App::onCustomBtnDown(const IEventArgs& evtArgs)
 
 Status App::onCustomBtnUp(const IEventArgs& evtArgs)
 {
-	output(_T("MOUSE up\n"));
-
 	ShowWindow(vertListBoxCmp->getHwnd(), SW_HIDE);
 
 	return S_SUCCESS;
@@ -573,7 +530,7 @@ Status App::onCustomBtnUp(const IEventArgs& evtArgs)
 
 Status App::onImageSelectorMouseLeave(const IEventArgs& evtArgs)
 {
-	output(_T("MOUSE move\n"));
+	#pragma message("TODO: detect mouse leave of vertical listbox")
 
 	if (GetKeyState(VK_LBUTTON) >= 0)
 		ShowWindow(vertListBoxCmp->getHwnd(), SW_HIDE);
@@ -586,17 +543,16 @@ Status App::customBtnCallback(const IEventArgs& evtArgs, const tstring iconPath)
 	const WinEventArgs& args = static_cast<const WinEventArgs&>(evtArgs);
 
 	if (customLayouts.size() >= 5) {
-		MessageBox(NULL, _T("Maximum custom layouts created"),
+		MessageBox(NULL, _T("Maximum number custom layouts created"),
 			_T(""), MB_OK | MB_ICONINFORMATION);
 		return S_SUCCESS;
 	}
 
-	// Detect all wnds open
+	// Detect top-level HWND's
 	openWnds.clear();
-
 	BOOL res = EnumWindows(enumWindows, (LPARAM)this);
+	
 	CustomLayout newCustomLayout;
-
 	_tcscpy(newCustomLayout.layoutIconPath, iconPath.c_str());
 
 	// Create WndInfo structs
@@ -605,9 +561,6 @@ Status App::customBtnCallback(const IEventArgs& evtArgs, const tstring iconPath)
 		RECTF wndDimScaled;
 		RECT wndDim, clientRect;
 		bool res1 = util->getClientRect(clientRect) == S_SUCCESS;
-
-		/*output(_T("Client: %d, %d, %d, %d\n"), clientRect.left,
-			clientRect.top, clientRect.right, clientRect.bottom);*/
 
 		// if is minimised
 		if (IsIconic(openWnds.at(i))) {
@@ -627,59 +580,43 @@ Status App::customBtnCallback(const IEventArgs& evtArgs, const tstring iconPath)
 			wndDim.bottom -= clientRect.top;
 		}
 
-		// Alt method
-		/*WINDOWINFO wndInfo = { 0 };
-		wndInfo.cbSize = sizeof(WINDOWINFO);
-		GetWindowInfo(openWnds.at(i), &wndInfo);
-		output(_T("DIMS: %d, %d, %d, %d\n"), wndInfo.rcWindow.left, wndInfo.rcWindow.top, wndInfo.rcWindow.right, wndInfo.rcWindow.bottom);
-		output(_T("BEFORE: %d, %d, %d, %d\n"), wndDim.left,
-		wndDim.top, wndDim.right, wndDim.bottom);*/
-		// END
+		float w					= clientRect.right	- clientRect.left;
+		float h					= clientRect.bottom - clientRect.top;
+		wndDimScaled.left		= (wndDim.left != 0)	? wndDim.left / w	: 0;
+		wndDimScaled.right		= (wndDim.right != 0)	? wndDim.right / w	: 0;
+		wndDimScaled.top		= (wndDim.top != 0)		? wndDim.top / h	: 0;
+		wndDimScaled.bottom		= (wndDim.bottom != 0)	? wndDim.bottom / h : 0;
 
-		// DEBUG
-		/*RECT r;
-		GetWindowRect(openWnds.at(i), &r);
-		output(_T("DIMS: %d, %d, %d, %d\n"), r.left, r.top, r.right, r.bottom);*/
-		// END DEBUG
-
-		float w = clientRect.right - clientRect.left;
-		float h = clientRect.bottom - clientRect.top;
-
-		//output(_T("BEFORE: %d, %d, %d, %d\n"), wndDim.left, wndDim.top, wndDim.right, wndDim.bottom);
-
-		wndDimScaled.left = (wndDim.left != 0) ? wndDim.left / w : 0;
-		wndDimScaled.right = (wndDim.right != 0) ? wndDim.right / w : 0;
-		wndDimScaled.top = (wndDim.top != 0) ? wndDim.top / h : 0;
-		wndDimScaled.bottom = (wndDim.bottom != 0) ? wndDim.bottom / h : 0;
-		//output(_T("AFTER: %ld, %f, %f\n"), wndDim.bottom, h, wndDim.bottom / h);
-		/*output(_T("AFTER: %f, %f, %f, %f\n"), wndDimScaled.left,
-			wndDimScaled.top, wndDimScaled.right, wndDimScaled.bottom);*/
-
-		tstring exePath;
 		DWORD pid;
+		tstring exePath;
 		GetWindowThreadProcessId(openWnds.at(i), &pid);
 		util->getProcessFilePath(pid, exePath);
 
 		HwndInfo hInfo;
 		_tcscpy(hInfo.exePath, exePath.c_str());
-		hInfo.openApp = true;
-		hInfo.wndDimScaled = wndDimScaled;
+		hInfo.openApp			= true;
+		hInfo.wndDimScaled		= wndDimScaled;
 		newCustomLayout.hwndInfos.push_back(hInfo);
 	}
 
+	// Remove 'void-layout' HWND
 	if (customLayouts.empty())
 		horizListBoxCmp->removeLastChild();
 
+	// Write new custom layout
 	if (!writeINIFile(newCustomLayout))
 		return S_UNDEFINED_ERROR;
 
-	int custLayoutIndex = customLayouts.size() - 1;
-	Status custMsg = Status::registerState(_T("Custom Layout"));
-	HWND custLytBtn = CreateWindowEx(WS_EX_TRANSPARENT, _T("BUTTON"), _T("Custom2"), WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON | BS_VCENTER | BS_BITMAP,
-	DPIAwareComponent::scaleUnits(0), DPIAwareComponent::scaleUnits(0),
-		btnSize.cx, btnSize.cy,
-		horizListBoxCmp->getHwnd(), (HMENU)custMsg.state, hinstance, 0);
+	// Add new Layout button to horiz listbox
+	int custLayoutIndex			= customLayouts.size() - 1;
+	Status custMsg				= Status::registerState(_T("Custom Layout"));
+	HWND custLytBtn				= CreateWindowEx(WS_EX_TRANSPARENT, _T("BUTTON"), _T("Custom2"), 
+												WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON | BS_VCENTER | BS_BITMAP,
+												DPIAwareComponent::scaleUnits(0), DPIAwareComponent::scaleUnits(0),
+												btnSize.cx, btnSize.cy,
+												horizListBoxCmp->getHwnd(), (HMENU)custMsg.state, hinstance, 0);
 
+	// Register button click callback
 	registerEventLambda<App>(custMsg, [custLayoutIndex, this](const IEventArgs& evtArgs)->Status {
 
 		return this->onLayoutBtnClick(evtArgs, custLayoutIndex);
@@ -702,23 +639,21 @@ Status App::onLayoutBtnClick(const IEventArgs& evtArgs, int custLayoutIndex)
 	if (message != BN_CLICKED)
 		return S_SUCCESS;
 
-	CustomLayout c = customLayouts.at(custLayoutIndex);
+	// Detect top-level HWND's
 	openWnds.clear();
 	BOOL res = EnumWindows(enumWindows, (LPARAM)this);
-
+	
 	RECT clientRect;
 	util->getClientRect(clientRect);
-	output(_T("Client: %d, %d, %d, %d\n"), clientRect.left,
-		clientRect.top, clientRect.right, clientRect.bottom);
-
-	float w = clientRect.right - clientRect.left;
-	float h = clientRect.bottom - clientRect.top;
+	float w							= clientRect.right - clientRect.left;
+	float h							= clientRect.bottom - clientRect.top;
+	CustomLayout c					= customLayouts.at(custLayoutIndex);
 	std::vector<HwndInfo> hwndInfos = c.hwndInfos;
-
+	
 	for (int i = 0; i < openWnds.size(); i++) {
 
-		tstring exePath;
 		DWORD pid;
+		tstring exePath;
 		GetWindowThreadProcessId(openWnds.at(i), &pid);
 		util->getProcessFilePath(pid, exePath);
 
@@ -726,17 +661,16 @@ Status App::onLayoutBtnClick(const IEventArgs& evtArgs, int custLayoutIndex)
 			if (_tcscmp(hwndInfos.at(j).exePath, exePath.c_str()) != 0)
 				continue;
 
-			output(_T("[%f,%f]\n"), hwndInfos.at(j).wndDimScaled.top, hwndInfos.at(j).wndDimScaled.bottom);
 			RECT wndDim;
-			wndDim.left = w * hwndInfos.at(j).wndDimScaled.left;
-			wndDim.top = h * hwndInfos.at(j).wndDimScaled.top;
-			wndDim.right = w * hwndInfos.at(j).wndDimScaled.right;
-			wndDim.bottom = h * hwndInfos.at(j).wndDimScaled.bottom;
+			wndDim.left						= w * hwndInfos.at(j).wndDimScaled.left;
+			wndDim.top						= h * hwndInfos.at(j).wndDimScaled.top;
+			wndDim.right					= w * hwndInfos.at(j).wndDimScaled.right;
+			wndDim.bottom					= h * hwndInfos.at(j).wndDimScaled.bottom;
 
 			WINDOWPLACEMENT wndPlacement;
-			wndPlacement.length = sizeof(WINDOWPLACEMENT);
-			wndPlacement.showCmd = SW_SHOWNORMAL;
-			wndPlacement.rcNormalPosition = wndDim;
+			wndPlacement.length				= sizeof(WINDOWPLACEMENT);
+			wndPlacement.showCmd			= SW_SHOWNORMAL;
+			wndPlacement.rcNormalPosition	= wndDim;
 			SetWindowPlacement(openWnds.at(i), &wndPlacement);
 			hwndInfos.erase(hwndInfos.begin() + j);
 			break;
@@ -751,7 +685,6 @@ Status App::readINIFile()
 	// Get Sections
 
 	std::vector<tstring> sectionNames;
-	
 	if (!util->getINISectionNames(INIFilePath, sectionNames)) {
 		output(_T("Failed to get section names\n"));
 		return S_UNDEFINED_ERROR;
@@ -782,12 +715,12 @@ Status App::readINIFile()
 
 			HwndInfo hInfo;
 
-#ifdef USE_MEMCPY
-			memcpy(&hInfo, value.c_str(), value.size()); //sizeof(value));
-#else
+			#ifdef USE_MEMCPY
+			memcpy(&hInfo, value.c_str(), value.size());
+			#else
 			if (!GetPrivateProfileStruct(sectionNames[i].c_str(), keys[j].c_str(), &hInfo, sizeof(HwndInfo), INIFilePath.c_str()))
 				output(_T("Failed to read struct\n"));
-#endif // USE_MEMCPY
+			#endif // USE_MEMCPY
 
 			layout.hwndInfos.push_back(hInfo);
 		}
@@ -823,10 +756,10 @@ Status App::writeINIFile(const CustomLayout& layout)
 
 Status App::loadCustomLayoutIcons()
 {
-	HWND vertLb = vertListBoxCmp->getHwnd();
 	WIN32_FIND_DATA dirData;
-	HANDLE dir = FindFirstFileEx(_T("Images\\CustomLayoutIcons\\*"), FindExInfoStandard, &dirData,
-		FindExSearchNameMatch, NULL, 0);
+	HWND vertLb			= vertListBoxCmp->getHwnd();
+	HANDLE dir			= FindFirstFileEx(_T("Images\\CustomLayoutIcons\\*"), FindExInfoStandard, 
+							&dirData, FindExSearchNameMatch, NULL, 0);
 
 	if (dir == INVALID_HANDLE_VALUE)
 		return S_UNDEFINED_ERROR;
@@ -842,15 +775,14 @@ Status App::loadCustomLayoutIcons()
 			continue;
 
 		tstring imgPath = _T("Images\\CustomLayoutIcons\\") + fileName;
-		HBITMAP bmp = (HBITMAP)::LoadImage(NULL,
-			imgPath.c_str(), IMAGE_BITMAP, btnSize.cx, btnSize.cy,
-			LR_LOADFROMFILE | LR_CREATEDIBSECTION | LR_DEFAULTSIZE | LR_VGACOLOR | LR_SHARED);
+		HBITMAP bmp = (HBITMAP)::LoadImage(NULL, imgPath.c_str(), IMAGE_BITMAP, btnSize.cx, btnSize.cy,
+											LR_LOADFROMFILE | LR_CREATEDIBSECTION | LR_DEFAULTSIZE | LR_VGACOLOR | LR_SHARED);
 		gdiObjects.push_back(bmp);
 
 		HWND custLytBtn = CreateWindowEx(WS_EX_TRANSPARENT, _T("BUTTON"), _T("Custom3"), WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON | BS_VCENTER | BS_BITMAP,
-			DPIAwareComponent::scaleUnits(202), DPIAwareComponent::scaleUnits(195),
-			btnSize.cx, btnSize.cy,
-			vertLb, 0, hinstance, 0);
+										DPIAwareComponent::scaleUnits(202), DPIAwareComponent::scaleUnits(195),
+										btnSize.cx, btnSize.cy,
+										vertLb, 0, hinstance, 0);
 
 		SendMessage(custLytBtn, BM_SETIMAGE, IMAGE_BITMAP, (LPARAM)bmp);
 		vertListBoxCmp->addChild(custLytBtn);
@@ -858,10 +790,39 @@ Status App::loadCustomLayoutIcons()
 		registerEventLambda<App>(DispatchWindowComponent::translateMessage(custLytBtn, WM_LBUTTONUP),
 			[&, imgPath](const IEventArgs& evtArgs)->Status {
 
-			output(_T("custLytBtn\n"));
 			ShowWindow(vertListBoxCmp->getHwnd(), SW_HIDE);
 			customBtnCallback(evtArgs, imgPath);
 			return S_SUCCESS;
+		});
+	}
+
+	return S_SUCCESS;
+}
+
+Status App::loadCustomLayouts()
+{
+	for (int i = 0; i < customLayouts.size(); i++) {
+		Status custMsg = Status::registerState(_T("Custom Layout"));
+		HWND custLytBtn = CreateWindowEx(WS_EX_TRANSPARENT, _T("BUTTON"),
+			_T("Custom1"),
+			WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON | BS_VCENTER | BS_BITMAP,
+			0, 0,
+			btnSize.cx, btnSize.cy,
+			horizListBoxCmp->getHwnd(), (HMENU)custMsg.state, hinstance, 0);
+
+		output(_T("img path: %s\n"), customLayouts[i].layoutIconPath);
+		HBITMAP bmp = (HBITMAP)::LoadImage(NULL,
+			customLayouts[i].layoutIconPath, IMAGE_BITMAP, btnSize.cx, btnSize.cy,
+			LR_LOADFROMFILE | LR_CREATEDIBSECTION | LR_DEFAULTSIZE | LR_VGACOLOR | LR_SHARED);
+
+		gdiObjects.push_back(bmp);
+		horizListBoxCmp->addChild(custLytBtn);
+		SendMessage(custLytBtn, BM_SETIMAGE, IMAGE_BITMAP, (LPARAM)bmp);
+
+		registerEventLambda<App>(custMsg,
+			[i, this](const IEventArgs& evtArgs)->Status {
+
+			return this->onLayoutBtnClick(evtArgs, i);
 		});
 	}
 
