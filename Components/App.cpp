@@ -40,11 +40,64 @@ BOOL CALLBACK App::enumWindows(HWND hwnd, LPARAM lParam)
 {
 	App* app = (App*)lParam;
 
-	if (app->isAltTabWindow(hwnd))
+	if (App::isAltTabWindow(hwnd))
 		app->openWnds.push_back(hwnd);
 
 	return TRUE;
 }
+
+BOOL CALLBACK App::findWindowCallback(HWND hwnd, LPARAM lParam)
+{
+	FindWindowInfo& data = *(FindWindowInfo*)lParam;
+	
+	DWORD lpdwProcessId;
+	GetWindowThreadProcessId(hwnd, &lpdwProcessId);
+	
+	output(_T("pid: %d, %d\n"), data.pId, lpdwProcessId);
+	if (lpdwProcessId == data.pId && App::isAltTabWindow(hwnd)) {
+		outputStr("Found hwnd\n");
+		data.targetHwnd = hwnd;
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+bool App::isAltTabWindow(HWND hwnd)
+{
+	#pragma message("Bug: currently misses some top level windows incl Piriform CCleaner.")
+	TITLEBARINFO ti;
+	HWND hwndTry, hwndWalk = NULL;
+
+	if (!IsWindowVisible(hwnd))
+		return false;
+
+	hwndTry = GetAncestor(hwnd, GA_ROOTOWNER);
+	while (hwndTry != hwndWalk)
+	{
+		hwndWalk = hwndTry;
+		hwndTry = GetLastActivePopup(hwndWalk);
+		if (IsWindowVisible(hwndTry))
+			break;
+	}
+
+	if (hwndWalk != hwnd)
+		return false;
+
+	// the following removes some task tray programs and "Program Manager"
+	ti.cbSize = sizeof(ti);
+	GetTitleBarInfo(hwnd, &ti);
+	if (ti.rgstate[0] & STATE_SYSTEM_INVISIBLE)
+		return false;
+
+	// Tool windows should not be displayed either, these do not appear in the
+	// task bar.
+	if (GetWindowLong(hwnd, GWL_EXSTYLE) & WS_EX_TOOLWINDOW)
+		return false;
+
+	return true;
+}
+
 
 // Function Implementation //
 App::App() 
@@ -332,56 +385,6 @@ Status App::onKillFocus(const IEventArgs& evtArgs)
 	return S_SUCCESS;
 }
 
-bool App::isAltTabWindow(HWND hwnd)
-{
-	#pragma message("Bug: currently misses some top level windows incl Piriform CCleaner.")
-	TITLEBARINFO ti;
-	HWND hwndTry, hwndWalk = NULL;
-
-	if (!IsWindowVisible(hwnd))
-		return false;
-
-	hwndTry = GetAncestor(hwnd, GA_ROOTOWNER);
-	while (hwndTry != hwndWalk)
-	{
-		hwndWalk = hwndTry;
-		hwndTry = GetLastActivePopup(hwndWalk);
-		if (IsWindowVisible(hwndTry))
-			break;
-	}
-
-	if (hwndWalk != hwnd)
-		return false;
-
-	// the following removes some task tray programs and "Program Manager"
-	ti.cbSize = sizeof(ti);
-	GetTitleBarInfo(hwnd, &ti);
-	if (ti.rgstate[0] & STATE_SYSTEM_INVISIBLE)
-		return false;
-
-	// Tool windows should not be displayed either, these do not appear in the
-	// task bar.
-	if (GetWindowLong(hwnd, GWL_EXSTYLE) & WS_EX_TOOLWINDOW)
-		return false;
-
-	return true;
-}
-
-//bool App::isAltTabWindow(HWND hwnd)
-//{
-//	// Start at the root owner
-//	HWND hwndWalk = GetAncestor(hwnd, GA_ROOTOWNER);
-//
-//	// See if we are the last active visible popup
-//	HWND hwndTry;
-//	while ((hwndTry = GetLastActivePopup(hwndWalk)) != hwndTry) {
-//		if (IsWindowVisible(hwndTry)) break;
-//		hwndWalk = hwndTry;
-//	}
-//
-//	return hwndWalk == hwnd;
-//}
-
 Status App::gridBtnCallback(const IEventArgs& evtArgs)
 {
 	const WinEventArgs& args = static_cast<const WinEventArgs&>(evtArgs);
@@ -427,6 +430,8 @@ Status App::gridBtnCallback(const IEventArgs& evtArgs)
 			RECT r{ x, y, x + gridDim.cx, y + gridDim.cy };
 			wndPlacement.rcNormalPosition = r;
 			SetWindowPlacement(openWnds.at(index), &wndPlacement);
+			// Bring to front
+			SetWindowPos(openWnds.at(index), HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
 			x += gridDim.cx;
 			index++;
 		}
@@ -468,6 +473,8 @@ Status App::columnsBtnCallback(const IEventArgs& evtArgs)
 		wndPlacement.showCmd = SW_SHOWNORMAL;
 		wndPlacement.rcNormalPosition = RECT{ x, y, x + gridDim.cx, y + gridDim.cy };
 		SetWindowPlacement(openWnds.at(i), &wndPlacement);
+		// Bring to front
+		SetWindowPos(openWnds.at(i), HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
 
 		x += gridDim.cx;
 	}
@@ -622,6 +629,14 @@ Status App::customBtnCallback(const IEventArgs& evtArgs, const tstring iconPath)
 		return this->onLayoutBtnClick(evtArgs, custLayoutIndex);
 	});
 
+
+	registerEventLambda<App>(DispatchWindowComponent::translateMessage(custLytBtn, WM_RBUTTONDOWN),
+		[custLayoutIndex, this](const IEventArgs& evtArgs)->Status {
+
+		output(_T("Right btn\n"));
+		return S_SUCCESS;
+	});
+
 	horizListBoxCmp->addChild(custLytBtn, horizListBoxCmp->size() - 1);
 	HBITMAP bm = (HBITMAP)SendMessage(args.hwnd, BM_GETIMAGE, IMAGE_BITMAP, 0);
 	SendMessage(custLytBtn, BM_SETIMAGE, IMAGE_BITMAP, (LPARAM)bm);
@@ -672,10 +687,43 @@ Status App::onLayoutBtnClick(const IEventArgs& evtArgs, int custLayoutIndex)
 			wndPlacement.showCmd			= SW_SHOWNORMAL;
 			wndPlacement.rcNormalPosition	= wndDim;
 			SetWindowPlacement(openWnds.at(i), &wndPlacement);
+
+			// Bring to front
+			SetWindowPos(openWnds.at(i), HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+
 			hwndInfos.erase(hwndInfos.begin() + j);
 			break;
 		}
 	}
+
+	/*for (int j = 0; j < hwndInfos.size(); j++) {
+		if (!hwndInfos[j].openApp)
+			continue;
+
+		RECT wndDim;
+		wndDim.left = w * hwndInfos.at(j).wndDimScaled.left;
+		wndDim.top = h * hwndInfos.at(j).wndDimScaled.top;
+		wndDim.right = w * hwndInfos.at(j).wndDimScaled.right;
+		wndDim.bottom = h * hwndInfos.at(j).wndDimScaled.bottom;
+
+		STARTUPINFO si;
+		PROCESS_INFORMATION pi;
+		ZeroMemory(&si, sizeof(si));
+		ZeroMemory(&pi, sizeof(pi));
+		si.cb = sizeof(si);
+		si.dwFlags = STARTF_USEPOSITION | STARTF_USESIZE;
+		si.dwX = wndDim.left;
+		si.dwY = wndDim.top;
+		si.dwXSize = wndDim.right;
+		si.dwYSize = wndDim.bottom;
+
+		if (!CreateProcess(hwndInfos[j].exePath, _T(""),
+			NULL, NULL, FALSE, CREATE_NEW_CONSOLE, NULL,
+			NULL, &si, &pi)) {
+			output(_T("Failed to open: %s\n"), hwndInfos[j].exePath);
+			continue;
+		}
+	}*/
 
 	return S_SUCCESS;
 }
@@ -823,6 +871,18 @@ Status App::loadCustomLayouts()
 			[i, this](const IEventArgs& evtArgs)->Status {
 
 			return this->onLayoutBtnClick(evtArgs, i);
+		});
+
+		registerEventLambda<App>(DispatchWindowComponent::translateMessage(custLytBtn, WM_RBUTTONDOWN),
+			[i, this](const IEventArgs& evtArgs)->Status {
+
+			output(_T("Right btn\n"));
+
+			// remove button
+			// delete from customLayouts
+			// delete from ini file
+
+			return S_SUCCESS;
 		});
 	}
 

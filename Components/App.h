@@ -32,6 +32,18 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "stdafx.h"
 
+struct FindWindowInfo
+{
+	FindWindowInfo() = delete;
+	FindWindowInfo(DWORD pId) : targetHwnd(nullptr), pId(pId)
+	{
+
+	}
+
+	HWND targetHwnd;
+	DWORD pId;
+};
+
 class App : public Win32App
 {
 public:
@@ -42,6 +54,8 @@ public:
 	static Status WM_MENU_EXIT;
 
 	static BOOL CALLBACK enumWindows(HWND hwnd, LPARAM lParam);
+	static BOOL CALLBACK findWindowCallback(HWND hwnd, LPARAM lParam);
+	static bool isAltTabWindow(HWND hwnd);
 
 	virtual ~App();
 
@@ -54,7 +68,6 @@ protected:
 
 	Status showWindow(const IEventArgs& evtArgs=NULL_ARGS);
 	Status hideWindow(const IEventArgs& evtArgs = NULL_ARGS);
-	bool isAltTabWindow(HWND hwnd);
 
 	Status gridBtnCallback(const IEventArgs& evtArgs);
 	Status columnsBtnCallback(const IEventArgs& evtArgs);
