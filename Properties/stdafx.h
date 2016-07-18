@@ -66,6 +66,8 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "Resource.h"
 
 #include "CBA.h"
+#include "Models/HwndInfo.h"
+#include "Models/CustomLayout.h"
 #include "Platforms/Win32App.h"
 #include "Platforms/DispatchWindowComponent.h"
 #include "Platforms/DPIAwareComponent.h"
@@ -76,7 +78,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "Platforms/ScheduleAppComponent.h"
 #include "Platforms/AutoUpdateComponent.h"
 #include "Platforms/TooltipComponent.h"
+#include "Platforms/RunApplicationComponent.h"
 //#include "Platforms/ImageBtnComponent.h"
 #include "Components/BorderWindowComponent.h"
-#include "Models/HwndInfo.h"
 #include "Components/App.h"

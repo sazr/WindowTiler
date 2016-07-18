@@ -27,13 +27,23 @@ OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#ifndef WT_CUSTLAYOUT_H
+#define WT_CUSTLAYOUT_H
+
 #include "stdafx.h"
-#include "HwndInfo.h"
 
-// Class Property Implementation //
+struct CustomLayout
+{
+	TCHAR INISectionName[MAX_PATH];
+	TCHAR layoutIconPath[MAX_PATH];
+	std::vector<HwndInfo> hwndInfos;
 
+	bool CustomLayout::operator == (const CustomLayout& c) const
+	{
+		return _tccmp(INISectionName, c.INISectionName) == 0 &&
+			_tccmp(layoutIconPath, c.layoutIconPath) == 0 &&
+			hwndInfos == c.hwndInfos;
+	}
+};
 
-// Static Function Implementation //
-
-
-// Function Implementation //
+#endif // WT_CUSTLAYOUT_H
