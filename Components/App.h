@@ -54,7 +54,6 @@ public:
 	static Status WM_MENU_EXIT;
 
 	static BOOL CALLBACK enumWindows(HWND hwnd, LPARAM lParam);
-	static BOOL CALLBACK findWindowCallback(HWND hwnd, LPARAM lParam);
 	static bool isAltTabWindow(HWND hwnd);
 
 	virtual ~App();
@@ -75,7 +74,7 @@ protected:
 	Status onCustomBtnDown(const IEventArgs& evtArgs);
 	Status onCustomBtnUp(const IEventArgs& evtArgs);
 	Status onImageSelectorMouseLeave(const IEventArgs& evtArgs);
-	Status onLayoutBtnClick(const IEventArgs& evtArgs, int custLayoutIndex);
+	Status onLayoutBtnClick(const IEventArgs& evtArgs, const CustomLayout& customLayout); //int custLayoutIndex);
 	Status onTrayIconInteraction(const IEventArgs& evtArgs);
 	Status onKillFocus(const IEventArgs& evtArgs);
 
@@ -105,6 +104,7 @@ private:
 	std::shared_ptr<HorzListBoxComponent> horizListBoxCmp;
 	std::shared_ptr<VertListBoxComponent> vertListBoxCmp;
 	std::shared_ptr<SystemTrayComponent> sysTrayCmp;
+	std::shared_ptr<RunApplicationComponent> runAppsCmp;
 };
 
 #endif // WT_APP_H

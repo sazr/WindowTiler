@@ -46,23 +46,6 @@ BOOL CALLBACK App::enumWindows(HWND hwnd, LPARAM lParam)
 	return TRUE;
 }
 
-BOOL CALLBACK App::findWindowCallback(HWND hwnd, LPARAM lParam)
-{
-	FindWindowInfo& data = *(FindWindowInfo*)lParam;
-	
-	DWORD lpdwProcessId;
-	GetWindowThreadProcessId(hwnd, &lpdwProcessId);
-	
-	output(_T("pid: %d, %d\n"), data.pId, lpdwProcessId);
-	if (lpdwProcessId == data.pId && App::isAltTabWindow(hwnd)) {
-		outputStr("Found hwnd\n");
-		data.targetHwnd = hwnd;
-		return FALSE;
-	}
-
-	return TRUE;
-}
-
 bool App::isAltTabWindow(HWND hwnd)
 {
 	#pragma message("Bug: currently misses some top level windows incl Piriform CCleaner.")
@@ -98,11 +81,10 @@ bool App::isAltTabWindow(HWND hwnd)
 	return true;
 }
 
-
 // Function Implementation //
 App::App() 
-	: Win32App()/*, 
-	INIFilePath(INIFilePath)*/
+	: Win32App(),
+	voidBtn(nullptr)
 {
 	wndDimensions		= RECT{ -400, -400, 420, 126 };
 	bkColour			= CreateSolidBrush(RGB(50, 50, 50));
@@ -156,6 +138,7 @@ Status App::init(const IEventArgs& evtArgs)
 	auto tooltipCmp			= addComponent<TooltipComponent>(app);
 	auto dispatchCmp		= addComponent<DispatchWindowComponent>(app);
 	sysTrayCmp				= addComponent<SystemTrayComponent>(app, _T("images/small.ico"), _T("Window Tiler"));
+	runAppsCmp				= addComponent<RunApplicationComponent>(app);
 	addComponent<BorderWindowComponent>(app, RECT{6, 6, 408, 114});
 	horizListBoxCmp			= addComponent<HorzListBoxComponent>(app, RECT{ 18, 16,
 								386, 94 }, grayBrush, 8, 2, true);
@@ -295,17 +278,14 @@ Status App::onTrayIconInteraction(const IEventArgs& evtArgs)
 
 		if (clicked == WM_MENU_REPORT_BUG.state)
 		{
-			output(_T("Report\n"));
 			ShellExecute(NULL, _T("open"), _T("http://windowtiler.soribo.com.au/report-a-bug/"), NULL, NULL, SW_SHOWNORMAL);
 		}
 		else if (clicked == WM_MENU_DONATE.state)
 		{
-			output(_T("Donate\n"));
 			ShellExecute(NULL, _T("open"), _T("http://windowtiler.soribo.com.au/donate"), NULL, NULL, SW_SHOWNORMAL);
 		}
 		else if (clicked == WM_MENU_EXIT.state)
 		{
-			output(_T("Exit\n"));
 			PostMessage(args.hwnd, WM_CLOSE, 0, 0);
 		}
 	}
@@ -565,19 +545,25 @@ Status App::customBtnCallback(const IEventArgs& evtArgs, const tstring iconPath)
 	// Create WndInfo structs
 	for (int i = 0; i < openWnds.size(); i++) {
 
+		HwndInfo hInfo;
 		RECTF wndDimScaled;
 		RECT wndDim, clientRect;
 		bool res1 = util->getClientRect(clientRect) == S_SUCCESS;
+		hInfo.showState = SW_SHOWNORMAL;
+
+		WINDOWPLACEMENT wndPlacement;
+		wndPlacement.length = sizeof(WINDOWPLACEMENT);
+		GetWindowPlacement(openWnds.at(i), &wndPlacement);
 
 		// if is minimised
 		if (IsIconic(openWnds.at(i))) {
 			if (skipMinimisedHwnds)
 				continue;
 
-			WINDOWPLACEMENT wndPlacement;
-			wndPlacement.length = sizeof(WINDOWPLACEMENT);
-			BOOL res2 = GetWindowPlacement(openWnds.at(i), &wndPlacement);
 			wndDim = wndPlacement.rcNormalPosition;
+		}
+		else if (wndPlacement.showCmd == SW_MAXIMIZE) {
+			hInfo.showState = SW_SHOWMAXIMIZED;
 		}
 		else {
 			GetWindowRect(openWnds.at(i), &wndDim);
@@ -598,8 +584,8 @@ Status App::customBtnCallback(const IEventArgs& evtArgs, const tstring iconPath)
 		tstring exePath;
 		GetWindowThreadProcessId(openWnds.at(i), &pid);
 		util->getProcessFilePath(pid, exePath);
+		output(_T("Exe: %s\n"), exePath.c_str());
 
-		HwndInfo hInfo;
 		_tcscpy(hInfo.exePath, exePath.c_str());
 		hInfo.openApp			= true;
 		hInfo.wndDimScaled		= wndDimScaled;
@@ -607,15 +593,18 @@ Status App::customBtnCallback(const IEventArgs& evtArgs, const tstring iconPath)
 	}
 
 	// Remove 'void-layout' HWND
-	if (customLayouts.empty())
+	if (voidBtn != nullptr) {
 		horizListBoxCmp->removeLastChild();
+		voidBtn = nullptr;
+	}
 
 	// Write new custom layout
 	if (!writeINIFile(newCustomLayout))
 		return S_UNDEFINED_ERROR;
 
 	// Add new Layout button to horiz listbox
-	int custLayoutIndex			= customLayouts.size() - 1;
+	//int custLayoutIndex			= customLayouts.size() - 1;
+	//auto custLayoutIter			= --(customLayouts.end());
 	Status custMsg				= Status::registerState(_T("Custom Layout"));
 	HWND custLytBtn				= CreateWindowEx(WS_EX_TRANSPARENT, _T("BUTTON"), _T("Custom2"), 
 												WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON | BS_VCENTER | BS_BITMAP,
@@ -624,16 +613,28 @@ Status App::customBtnCallback(const IEventArgs& evtArgs, const tstring iconPath)
 												horizListBoxCmp->getHwnd(), (HMENU)custMsg.state, hinstance, 0);
 
 	// Register button click callback
-	registerEventLambda<App>(custMsg, [custLayoutIndex, this](const IEventArgs& evtArgs)->Status {
+	registerEventLambda<App>(custMsg, [newCustomLayout, this](const IEventArgs& evtArgs)->Status {
 
-		return this->onLayoutBtnClick(evtArgs, custLayoutIndex);
+		return this->onLayoutBtnClick(evtArgs, newCustomLayout);
 	});
 
+	registerEventLambda<App>(DispatchWindowComponent::translateMessage(custMsg, WM_RBUTTONDOWN),
+		[newCustomLayout, custLytBtn, this](const IEventArgs& evtArgs)->Status {
 
-	registerEventLambda<App>(DispatchWindowComponent::translateMessage(custLytBtn, WM_RBUTTONDOWN),
-		[custLayoutIndex, this](const IEventArgs& evtArgs)->Status {
+		// remove button
+		horizListBoxCmp->removeChild(custLytBtn);
 
-		output(_T("Right btn\n"));
+		// delete from ini file
+		if (!WritePrivateProfileString(newCustomLayout.INISectionName, 0, 0, INIFilePath.c_str())) {
+			output(_T("Failed delete custom layout from INI file\n"));
+			return S_UNDEFINED_ERROR;
+		}
+
+		auto it = std::remove(customLayouts.begin(), customLayouts.end(), newCustomLayout);
+		if (it != customLayouts.end())
+			customLayouts.erase(it);
+		//customLayouts.erase(std::remove_if(customLayouts.begin(), customLayouts.end(), newCustomLayout), customLayouts.end());
+
 		return S_SUCCESS;
 	});
 
@@ -646,7 +647,7 @@ Status App::customBtnCallback(const IEventArgs& evtArgs, const tstring iconPath)
 	return S_SUCCESS;
 }
 
-Status App::onLayoutBtnClick(const IEventArgs& evtArgs, int custLayoutIndex)
+Status App::onLayoutBtnClick(const IEventArgs& evtArgs, const CustomLayout& customLayout) //int custLayoutIndex)
 {
 	const WinEventArgs& args = static_cast<const WinEventArgs&>(evtArgs);
 	int message = HIWORD(args.wParam);
@@ -660,16 +661,22 @@ Status App::onLayoutBtnClick(const IEventArgs& evtArgs, int custLayoutIndex)
 	
 	RECT clientRect;
 	util->getClientRect(clientRect);
+	std::vector<HWND> hwndIgnoreList;
 	float w							= clientRect.right - clientRect.left;
 	float h							= clientRect.bottom - clientRect.top;
-	CustomLayout c					= customLayouts.at(custLayoutIndex);
-	std::vector<HwndInfo> hwndInfos = c.hwndInfos;
+	//CustomLayout c					= customLayouts.at(custLayoutIndex);
+	std::vector<HwndInfo> hwndInfos = customLayout.hwndInfos;
 	
 	for (int i = 0; i < openWnds.size(); i++) {
 
 		DWORD pid;
 		tstring exePath;
 		GetWindowThreadProcessId(openWnds.at(i), &pid);
+		bool inIgnoreList = std::find(hwndIgnoreList.begin(), hwndIgnoreList.end(), openWnds[i]) != hwndIgnoreList.end();
+		
+		if (inIgnoreList)
+			continue;
+
 		util->getProcessFilePath(pid, exePath);
 
 		for (int j = 0; j < hwndInfos.size(); j++) {
@@ -684,7 +691,7 @@ Status App::onLayoutBtnClick(const IEventArgs& evtArgs, int custLayoutIndex)
 
 			WINDOWPLACEMENT wndPlacement;
 			wndPlacement.length				= sizeof(WINDOWPLACEMENT);
-			wndPlacement.showCmd			= SW_SHOWNORMAL;
+			wndPlacement.showCmd			= hwndInfos.at(j).showState; // SW_SHOWNORMAL;
 			wndPlacement.rcNormalPosition	= wndDim;
 			SetWindowPlacement(openWnds.at(i), &wndPlacement);
 
@@ -692,38 +699,13 @@ Status App::onLayoutBtnClick(const IEventArgs& evtArgs, int custLayoutIndex)
 			SetWindowPos(openWnds.at(i), HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
 
 			hwndInfos.erase(hwndInfos.begin() + j);
+			hwndIgnoreList.push_back(openWnds[i]);
 			break;
 		}
 	}
 
-	/*for (int j = 0; j < hwndInfos.size(); j++) {
-		if (!hwndInfos[j].openApp)
-			continue;
-
-		RECT wndDim;
-		wndDim.left = w * hwndInfos.at(j).wndDimScaled.left;
-		wndDim.top = h * hwndInfos.at(j).wndDimScaled.top;
-		wndDim.right = w * hwndInfos.at(j).wndDimScaled.right;
-		wndDim.bottom = h * hwndInfos.at(j).wndDimScaled.bottom;
-
-		STARTUPINFO si;
-		PROCESS_INFORMATION pi;
-		ZeroMemory(&si, sizeof(si));
-		ZeroMemory(&pi, sizeof(pi));
-		si.cb = sizeof(si);
-		si.dwFlags = STARTF_USEPOSITION | STARTF_USESIZE;
-		si.dwX = wndDim.left;
-		si.dwY = wndDim.top;
-		si.dwXSize = wndDim.right;
-		si.dwYSize = wndDim.bottom;
-
-		if (!CreateProcess(hwndInfos[j].exePath, _T(""),
-			NULL, NULL, FALSE, CREATE_NEW_CONSOLE, NULL,
-			NULL, &si, &pi)) {
-			output(_T("Failed to open: %s\n"), hwndInfos[j].exePath);
-			continue;
-		}
-	}*/
+	// Open hwndinfo applications that aren't running
+	runAppsCmp->runApplications(hwndInfos, hwndIgnoreList);
 
 	return S_SUCCESS;
 }
@@ -741,11 +723,16 @@ Status App::readINIFile()
 	// Get Section data
 	for (int i = 0; i < sectionNames.size(); i++) {
 
-		CustomLayout layout;
-		std::vector<tstring> keys, values;
-
 		if (sectionNames[i].find(_T("CustomLayout")) == tstring::npos)
 			continue;
+		if (customLayouts.size() >= 5) {
+			output(_T("Maximum layouts reached\n"));
+			break;
+		}
+
+		CustomLayout layout;
+		std::vector<tstring> keys, values;
+		_tcscpy(layout.INISectionName, sectionNames[i].c_str());
 
 		if (!util->getINISectionKeyValues(INIFilePath, sectionNames[i], keys, values)) {
 			output(_T("Failed to get section key value pairs\n"));
@@ -781,9 +768,20 @@ Status App::readINIFile()
 
 Status App::writeINIFile(const CustomLayout& layout)
 {
+	int cIndex = customLayouts.size();
 	TCHAR index[10];
-	_itot(customLayouts.size(), index, 10);
+	_itot(cIndex, index, 10);
 	tstring sectionName = tstring(_T("CustomLayout")) + tstring(index);
+
+	tstring sectionNames;
+	util->getINISectionNames(INIFilePath, sectionNames);
+	while (sectionNames.find(sectionName) != tstring::npos) {
+
+		cIndex++;
+		_itot(cIndex, index, 10);
+		sectionName = tstring(_T("CustomLayout")) + tstring(index);
+
+	}
 
 	if (!WritePrivateProfileStruct(sectionName.c_str(), _T("layoutIconPath"), (LPVOID)(layout.layoutIconPath), sizeof(layout.layoutIconPath) / sizeof(layout.layoutIconPath[0])/*MAX_PATH*/, INIFilePath.c_str()))
 		output(_T("Failed to write HwndInfo to INI file\n"));
@@ -849,7 +847,9 @@ Status App::loadCustomLayoutIcons()
 
 Status App::loadCustomLayouts()
 {
-	for (int i = 0; i < customLayouts.size(); i++) {
+	//for (int i = 0; i < customLayouts.size(); i++) {
+	for (auto it = customLayouts.begin(); it != customLayouts.end(); ++it) {
+		CustomLayout customLayout = *it;
 		Status custMsg = Status::registerState(_T("Custom Layout"));
 		HWND custLytBtn = CreateWindowEx(WS_EX_TRANSPARENT, _T("BUTTON"),
 			_T("Custom1"),
@@ -858,9 +858,8 @@ Status App::loadCustomLayouts()
 			btnSize.cx, btnSize.cy,
 			horizListBoxCmp->getHwnd(), (HMENU)custMsg.state, hinstance, 0);
 
-		output(_T("img path: %s\n"), customLayouts[i].layoutIconPath);
 		HBITMAP bmp = (HBITMAP)::LoadImage(NULL,
-			customLayouts[i].layoutIconPath, IMAGE_BITMAP, btnSize.cx, btnSize.cy,
+			(*it).layoutIconPath, IMAGE_BITMAP, btnSize.cx, btnSize.cy,
 			LR_LOADFROMFILE | LR_CREATEDIBSECTION | LR_DEFAULTSIZE | LR_VGACOLOR | LR_SHARED);
 
 		gdiObjects.push_back(bmp);
@@ -868,19 +867,28 @@ Status App::loadCustomLayouts()
 		SendMessage(custLytBtn, BM_SETIMAGE, IMAGE_BITMAP, (LPARAM)bmp);
 
 		registerEventLambda<App>(custMsg,
-			[i, this](const IEventArgs& evtArgs)->Status {
+			[customLayout, this](const IEventArgs& evtArgs)->Status {
 
-			return this->onLayoutBtnClick(evtArgs, i);
+			return this->onLayoutBtnClick(evtArgs, customLayout);
 		});
 
-		registerEventLambda<App>(DispatchWindowComponent::translateMessage(custLytBtn, WM_RBUTTONDOWN),
-			[i, this](const IEventArgs& evtArgs)->Status {
-
-			output(_T("Right btn\n"));
+		registerEventLambda<App>(DispatchWindowComponent::translateMessage(custMsg, WM_RBUTTONDOWN),
+			[customLayout, custLytBtn, this](const IEventArgs& evtArgs)->Status {
 
 			// remove button
-			// delete from customLayouts
+			horizListBoxCmp->removeChild(custLytBtn);
+			
 			// delete from ini file
+			if (!WritePrivateProfileString(customLayout.INISectionName, 0, 0, INIFilePath.c_str())) {
+				output(_T("Failed delete custom layout from INI file\n"));
+				return S_UNDEFINED_ERROR;
+			}
+			
+			auto it = std::remove(customLayouts.begin(), customLayouts.end(), customLayout);
+			if (it != customLayouts.end())
+				customLayouts.erase(it);
+			/*auto it = std::remove_if(customLayouts.begin(), customLayouts.end(), customLayout);
+			customLayouts.erase(it, customLayouts.end());*/
 
 			return S_SUCCESS;
 		});
