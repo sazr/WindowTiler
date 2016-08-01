@@ -105,6 +105,7 @@ private:
 	std::shared_ptr<VertListBoxComponent> vertListBoxCmp;
 	std::shared_ptr<SystemTrayComponent> sysTrayCmp;
 	std::shared_ptr<RunApplicationComponent> runAppsCmp;
+	std::shared_ptr<AppUsageComponent> appUsageCmp;
 };
 
 #endif // WT_APP_H

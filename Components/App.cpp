@@ -135,11 +135,12 @@ Status App::init(const IEventArgs& evtArgs)
 
 	// Add pre-init components. TODO: edit CBA API to provide pre-init create components function
 	addComponent<DPIAwareComponent>(app);
+	addComponent<BorderWindowComponent>(app, RECT{6, 6, 408, 114});
 	auto tooltipCmp			= addComponent<TooltipComponent>(app);
 	auto dispatchCmp		= addComponent<DispatchWindowComponent>(app);
 	sysTrayCmp				= addComponent<SystemTrayComponent>(app, _T("images/small.ico"), _T("Window Tiler"));
 	runAppsCmp				= addComponent<RunApplicationComponent>(app);
-	addComponent<BorderWindowComponent>(app, RECT{6, 6, 408, 114});
+	appUsageCmp				= addComponent<AppUsageComponent>(app, _T("WindowTiler\\Log"), _T("windowtiler.soribo.com.au"), _T("catalogueUsage.php"));
 	horizListBoxCmp			= addComponent<HorzListBoxComponent>(app, RECT{ 18, 16,
 								386, 94 }, grayBrush, 8, 2, true);
 	vertListBoxCmp			= addComponent<VertListBoxComponent>(app, RECT{ 0, 0,
@@ -390,6 +391,9 @@ Status App::gridBtnCallback(const IEventArgs& evtArgs)
 	int nCols			= (int)ceil(evenWnds / nRows);
 	SIZE gridDim		= { (screenDim.right - screenDim.left) / nCols,
 							(screenDim.bottom - screenDim.top) / nRows };
+	tstringstream ss;
+	ss << _T("Grid Arrangement: nWindows=") << openWnds.size();
+	appUsageCmp->catalogueData(ss.str());
 
 	for (int row = 0; row < nRows; row++) {
 		for (int col = 0; col < nCols; col++) {
@@ -445,7 +449,10 @@ Status App::columnsBtnCallback(const IEventArgs& evtArgs)
 	int nCols				= openWnds.size();
 	SIZE gridDim			= { (screenDim.right - screenDim.left) / nCols,
 								screenDim.bottom - screenDim.top };
-	
+	tstringstream ss;
+	ss << _T("Columns Arrangement: nWindows=") << openWnds.size();
+	appUsageCmp->catalogueData(ss.str());
+
 	for (int i = 0; i < openWnds.size(); i++) {
 
 		WINDOWPLACEMENT wndPlacement;
@@ -539,8 +546,10 @@ Status App::customBtnCallback(const IEventArgs& evtArgs, const tstring iconPath)
 	openWnds.clear();
 	BOOL res = EnumWindows(enumWindows, (LPARAM)this);
 	
+	tstringstream ss;
 	CustomLayout newCustomLayout;
 	_tcscpy(newCustomLayout.layoutIconPath, iconPath.c_str());
+	ss << _T("Add new layout: icon=") << iconPath << _T(", applications=");
 
 	// Create WndInfo structs
 	for (int i = 0; i < openWnds.size(); i++) {
@@ -583,8 +592,8 @@ Status App::customBtnCallback(const IEventArgs& evtArgs, const tstring iconPath)
 		DWORD pid;
 		tstring exePath;
 		GetWindowThreadProcessId(openWnds.at(i), &pid);
-		util->getProcessFilePath(pid, exePath);
-		output(_T("Exe: %s\n"), exePath.c_str());
+		WinUtilityComponent::getProcessFilePath(pid, exePath);
+		ss << exePath << _T(", ");
 
 		_tcscpy(hInfo.exePath, exePath.c_str());
 		hInfo.openApp			= true;
@@ -612,7 +621,7 @@ Status App::customBtnCallback(const IEventArgs& evtArgs, const tstring iconPath)
 												btnSize.cx, btnSize.cy,
 												horizListBoxCmp->getHwnd(), (HMENU)custMsg.state, hinstance, 0);
 
-	// Register button click callback
+	// Register button events
 	registerEventLambda<App>(custMsg, [newCustomLayout, this](const IEventArgs& evtArgs)->Status {
 
 		return this->onLayoutBtnClick(evtArgs, newCustomLayout);
@@ -635,6 +644,8 @@ Status App::customBtnCallback(const IEventArgs& evtArgs, const tstring iconPath)
 			customLayouts.erase(it);
 		//customLayouts.erase(std::remove_if(customLayouts.begin(), customLayouts.end(), newCustomLayout), customLayouts.end());
 
+		appUsageCmp->catalogueData(tstring(_T("Remove custom layout: icon=")) + newCustomLayout.layoutIconPath);
+
 		return S_SUCCESS;
 	});
 
@@ -643,6 +654,8 @@ Status App::customBtnCallback(const IEventArgs& evtArgs, const tstring iconPath)
 	SendMessage(custLytBtn, BM_SETIMAGE, IMAGE_BITMAP, (LPARAM)bm);
 	InvalidateRect(horizListBoxCmp->getHwnd(), NULL, TRUE);
 	UpdateWindow(horizListBoxCmp->getHwnd());
+
+	appUsageCmp->catalogueData(ss.str());
 
 	return S_SUCCESS;
 }
@@ -666,7 +679,11 @@ Status App::onLayoutBtnClick(const IEventArgs& evtArgs, const CustomLayout& cust
 	float h							= clientRect.bottom - clientRect.top;
 	//CustomLayout c					= customLayouts.at(custLayoutIndex);
 	std::vector<HwndInfo> hwndInfos = customLayout.hwndInfos;
-	
+	tstringstream ss;
+	ss << _T("Custom Layout clicked: size=") << hwndInfos.size();
+	ss << _T(", Icon Path: ") << customLayout.layoutIconPath;
+	ss << _T(", applications=");
+
 	for (int i = 0; i < openWnds.size(); i++) {
 
 		DWORD pid;
@@ -677,12 +694,13 @@ Status App::onLayoutBtnClick(const IEventArgs& evtArgs, const CustomLayout& cust
 		if (inIgnoreList)
 			continue;
 
-		util->getProcessFilePath(pid, exePath);
+		WinUtilityComponent::getProcessFilePath(pid, exePath);
 
 		for (int j = 0; j < hwndInfos.size(); j++) {
 			if (_tcscmp(hwndInfos.at(j).exePath, exePath.c_str()) != 0)
 				continue;
 
+			ss << exePath << _T(", ");
 			RECT wndDim;
 			wndDim.left						= w * hwndInfos.at(j).wndDimScaled.left;
 			wndDim.top						= h * hwndInfos.at(j).wndDimScaled.top;
@@ -707,6 +725,8 @@ Status App::onLayoutBtnClick(const IEventArgs& evtArgs, const CustomLayout& cust
 	// Open hwndinfo applications that aren't running
 	runAppsCmp->runApplications(hwndInfos, hwndIgnoreList);
 
+	appUsageCmp->catalogueData(ss.str());
+
 	return S_SUCCESS;
 }
 
@@ -715,7 +735,7 @@ Status App::readINIFile()
 	// Get Sections
 
 	std::vector<tstring> sectionNames;
-	if (!util->getINISectionNames(INIFilePath, sectionNames)) {
+	if (!WinUtilityComponent::getINISectionNames(INIFilePath, sectionNames)) {
 		output(_T("Failed to get section names\n"));
 		return S_UNDEFINED_ERROR;
 	}
@@ -734,7 +754,7 @@ Status App::readINIFile()
 		std::vector<tstring> keys, values;
 		_tcscpy(layout.INISectionName, sectionNames[i].c_str());
 
-		if (!util->getINISectionKeyValues(INIFilePath, sectionNames[i], keys, values)) {
+		if (!WinUtilityComponent::getINISectionKeyValues(INIFilePath, sectionNames[i], keys, values)) {
 			output(_T("Failed to get section key value pairs\n"));
 			return S_UNDEFINED_ERROR;
 		}
@@ -774,7 +794,7 @@ Status App::writeINIFile(const CustomLayout& layout)
 	tstring sectionName = tstring(_T("CustomLayout")) + tstring(index);
 
 	tstring sectionNames;
-	util->getINISectionNames(INIFilePath, sectionNames);
+	WinUtilityComponent::getINISectionNames(INIFilePath, sectionNames);
 	while (sectionNames.find(sectionName) != tstring::npos) {
 
 		cIndex++;
@@ -889,6 +909,8 @@ Status App::loadCustomLayouts()
 				customLayouts.erase(it);
 			/*auto it = std::remove_if(customLayouts.begin(), customLayouts.end(), customLayout);
 			customLayouts.erase(it, customLayouts.end());*/
+
+			appUsageCmp->catalogueData(tstring(_T("Remove custom layout: icon=")) + customLayout.layoutIconPath);
 
 			return S_SUCCESS;
 		});
