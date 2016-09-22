@@ -80,6 +80,6 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "Platforms/TooltipComponent.h"
 #include "Platforms/RunApplicationComponent.h"
 #include "Platforms/AppUsageComponent.h"
-//#include "Platforms/ImageBtnComponent.h"
-#include "Components/BorderWindowComponent.h"
+#include "Platforms/TaskBarDockComponent.h"
+#include "Platforms/BorderWindowComponent.h"
 #include "Components/App.h"

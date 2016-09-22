@@ -32,18 +32,6 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "stdafx.h"
 
-struct FindWindowInfo
-{
-	FindWindowInfo() = delete;
-	FindWindowInfo(DWORD pId) : targetHwnd(nullptr), pId(pId)
-	{
-
-	}
-
-	HWND targetHwnd;
-	DWORD pId;
-};
-
 class App : public Win32App
 {
 public:
@@ -65,7 +53,6 @@ protected:
 
 	App();
 
-	Status showWindow(const IEventArgs& evtArgs=NULL_ARGS);
 	Status hideWindow(const IEventArgs& evtArgs = NULL_ARGS);
 
 	Status gridBtnCallback(const IEventArgs& evtArgs);
@@ -74,7 +61,7 @@ protected:
 	Status onCustomBtnDown(const IEventArgs& evtArgs);
 	Status onCustomBtnUp(const IEventArgs& evtArgs);
 	Status onImageSelectorMouseLeave(const IEventArgs& evtArgs);
-	Status onLayoutBtnClick(const IEventArgs& evtArgs, const CustomLayout& customLayout); //int custLayoutIndex);
+	Status onLayoutBtnClick(const IEventArgs& evtArgs, const CustomLayout& customLayout);
 	Status onTrayIconInteraction(const IEventArgs& evtArgs);
 	Status onKillFocus(const IEventArgs& evtArgs);
 
@@ -85,13 +72,12 @@ protected:
 	Status loadCustomLayouts();
 
 private:
-	Status IDB_GRID			= Status::registerState(_T("Grid Button"));
-	Status IDB_COLS			= Status::registerState(_T("Columns Button"));
-	Status IDB_CTM			= Status::registerState(_T("Custom Button"));
+	Status IDB_GRID	= Status::registerState( _T("Grid Button") );
+	Status IDB_COLS	= Status::registerState( _T("Columns Button") );
+	Status IDB_CTM = Status::registerState( _T("Custom Button") );
 
-	/*const*/ tstring INIFilePath;
+	tstring INIFilePath;
 	SIZE btnSize;
-	//HWND layoutBtn;
 	HWND gridBtn;
 	HWND columnBtn;
 	HWND customBtn;
