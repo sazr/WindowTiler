@@ -492,29 +492,7 @@ Status App::onCustomBtnDown(const IEventArgs& evtArgs)
 	int lbW = vlbDim.right - vlbDim.left;
 	int lbH = vlbDim.bottom - vlbDim.top;
 	int xPos = btnDim.left + ((btnW - lbW) / 2);
-	//int yPos = 0;
 	int yPos = (barData.uEdge == ABE_TOP) ? btnDim.bottom + 10 : btnDim.top - lbH - 10;
-
-	//switch (barData.uEdge)
-	//{
-	//case ABE_LEFT:
-	//case ABE_RIGHT:
-	//{
-	//	yPos = btnDim.top - lbH - 10;
-	//}
-	//break;
-	//case ABE_TOP:
-	//{
-	//	yPos = btnDim.bottom + 10;
-	//}
-	//break;
-	////case ABE_BOTTOM:
-	//default:
-	//{
-	//	yPos = btnDim.top - lbH - 10;
-	//}
-	//break;
-	//}
 
 	SetWindowPos(vertLb, HWND_TOPMOST, xPos, yPos, 0, 0, SWP_NOSIZE);
 	ShowWindow(vertLb, SW_SHOW);
