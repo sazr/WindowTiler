@@ -51,7 +51,8 @@ BOOL CALLBACK App::enumWindows(HWND hwnd, LPARAM lParam)
 bool App::isAltTabWindow(HWND hwnd)
 {
 	TITLEBARINFO ti;
-	HWND hwndTry, hwndWalk = NULL;
+	HWND hwndTry = NULL;
+	HWND hwndWalk = NULL;
 
 	if (!IsWindowVisible(hwnd))
 		return false;
@@ -276,9 +277,15 @@ Status App::initMenu()
 {
 	hMenu = CreatePopupMenu();
 
-	AppendMenu(hMenu, MF_STRING, WM_MENU_REPORT_BUG.state, TEXT("Report a bug"));
-	AppendMenu(hMenu, MF_STRING, WM_MENU_DONATE.state, TEXT("Donate"));
-	AppendMenu(hMenu, MF_STRING, WM_MENU_EXIT.state, TEXT("Exit"));
+	AppendMenu(hMenu, MF_STRING, WM_MENU_REPORT_BUG.state, 
+		TEXT("Report a bug"));
+
+	AppendMenu(hMenu, MF_STRING, WM_MENU_DONATE.state,
+		TEXT("Donate"));
+
+	AppendMenu(hMenu, MF_STRING, WM_MENU_EXIT.state, 
+		TEXT("Exit"));
+	
 	return S_SUCCESS;
 }
 
@@ -308,12 +315,14 @@ Status App::onTrayIconInteraction(const IEventArgs& evtArgs)
 
 		if (clicked == WM_MENU_REPORT_BUG.state)
 		{
-			ShellExecute(NULL, _T("open"), _T("http://windowtiler.soribo.com.au/report-a-bug/"), 
+			ShellExecute(NULL, _T("open"), 
+				_T("http://windowtiler.soribo.com.au/report-a-bug/"), 
 				NULL, NULL, SW_SHOWNORMAL);
 		}
 		else if (clicked == WM_MENU_DONATE.state)
 		{
-			ShellExecute(NULL, _T("open"), _T("http://windowtiler.soribo.com.au/donate"), 
+			ShellExecute(NULL, _T("open"), 
+				_T("http://windowtiler.soribo.com.au/donate"), 
 				NULL, NULL, SW_SHOWNORMAL);
 		}
 		else if (clicked == WM_MENU_EXIT.state)
@@ -337,7 +346,6 @@ Status App::onKillFocus(const IEventArgs& evtArgs)
 {
 	const WinEventArgs& args = static_cast<const WinEventArgs&>(evtArgs);
 
-	// HANDLE WM_ACTIVATEAPP
 	// if being deactived
 	if (args.wParam == FALSE)
 		hideWindow(evtArgs);
@@ -445,8 +453,8 @@ Status App::columnsBtnCallback(const IEventArgs& evtArgs)
 	ss << _T("Columns Arrangement: nWindows=") << openWnds.size();
 	appUsageCmp->catalogueData(ss.str());
 
-	for (int i = 0; i < openWnds.size(); i++) {
-
+	for (int i = 0; i < openWnds.size(); i++) 
+	{
 		WINDOWPLACEMENT wndPlacement;
 		wndPlacement.length = sizeof(WINDOWPLACEMENT);
 		wndPlacement.showCmd = SW_SHOWNORMAL;
@@ -484,28 +492,29 @@ Status App::onCustomBtnDown(const IEventArgs& evtArgs)
 	int lbW = vlbDim.right - vlbDim.left;
 	int lbH = vlbDim.bottom - vlbDim.top;
 	int xPos = btnDim.left + ((btnW - lbW) / 2);
-	int yPos = 0;
+	//int yPos = 0;
+	int yPos = (barData.uEdge == ABE_TOP) ? btnDim.bottom + 10 : btnDim.top - lbH - 10;
 
-	switch (barData.uEdge)
-	{
-	case ABE_LEFT:
-	case ABE_RIGHT:
-	{
-		yPos = btnDim.top - lbH - 10;
-	}
-	break;
-	case ABE_TOP:
-	{
-		yPos = btnDim.bottom + 10;
-	}
-	break;
-	//case ABE_BOTTOM:
-	default:
-	{
-		yPos = btnDim.top - lbH - 10;
-	}
-	break;
-	}
+	//switch (barData.uEdge)
+	//{
+	//case ABE_LEFT:
+	//case ABE_RIGHT:
+	//{
+	//	yPos = btnDim.top - lbH - 10;
+	//}
+	//break;
+	//case ABE_TOP:
+	//{
+	//	yPos = btnDim.bottom + 10;
+	//}
+	//break;
+	////case ABE_BOTTOM:
+	//default:
+	//{
+	//	yPos = btnDim.top - lbH - 10;
+	//}
+	//break;
+	//}
 
 	SetWindowPos(vertLb, HWND_TOPMOST, xPos, yPos, 0, 0, SWP_NOSIZE);
 	ShowWindow(vertLb, SW_SHOW);
@@ -564,16 +573,19 @@ Status App::customBtnCallback(const IEventArgs& evtArgs, const tstring iconPath)
 		GetWindowPlacement(openWnds.at(i), &wndPlacement);
 
 		// if is minimised
-		if (IsIconic(openWnds.at(i))) {
+		if (IsIconic(openWnds.at(i))) 
+		{
 			if (skipMinimisedHwnds)
 				continue;
 
 			wndDim = wndPlacement.rcNormalPosition;
 		}
-		else if (wndPlacement.showCmd == SW_MAXIMIZE) {
+		else if (wndPlacement.showCmd == SW_MAXIMIZE)
+		{
 			hInfo.showState = SW_SHOWMAXIMIZED;
 		}
-		else {
+		else 
+		{
 			GetWindowRect(openWnds.at(i), &wndDim);
 			wndDim.left -= clientRect.left;
 			wndDim.top -= clientRect.top;
@@ -601,7 +613,8 @@ Status App::customBtnCallback(const IEventArgs& evtArgs, const tstring iconPath)
 	}
 
 	// Remove placholder HWND
-	if (voidBtn != nullptr) {
+	if (voidBtn != nullptr) 
+	{
 		horizListBoxCmp->removeLastChild();
 		voidBtn = nullptr;
 	}
@@ -626,7 +639,9 @@ Status App::customBtnCallback(const IEventArgs& evtArgs, const tstring iconPath)
 		0);
 
 	// Register button events
-	registerEventLambda<App>(custMsg, [newCustomLayout, this](const IEventArgs& evtArgs)->Status {
+	registerEventLambda<App>(custMsg, 
+		[newCustomLayout, this](const IEventArgs& evtArgs)->Status 
+	{
 
 		return this->onLayoutBtnClick(evtArgs, newCustomLayout);
 	});
@@ -646,7 +661,9 @@ Status App::customBtnCallback(const IEventArgs& evtArgs, const tstring iconPath)
 			return S_UNDEFINED_ERROR;
 		}
 
-		auto it = std::remove(customLayouts.begin(), customLayouts.end(), newCustomLayout);
+		auto it = std::remove(customLayouts.begin(), 
+			customLayouts.end(), newCustomLayout);
+
 		if (it != customLayouts.end())
 			customLayouts.erase(it);
 		
@@ -757,7 +774,8 @@ Status App::readINIFile()
 	{
 		if (sectionNames[i].find(_T("CustomLayout")) == tstring::npos)
 			continue;
-		if (customLayouts.size() >= 5) {
+		if (customLayouts.size() >= 5) 
+		{
 			output(_T("Maximum layouts reached\n"));
 			break;
 		}
@@ -857,8 +875,8 @@ Status App::loadCustomLayoutIcons()
 {
 	WIN32_FIND_DATA dirData;
 	HWND vertLb = vertListBoxCmp->getHwnd();
-	HANDLE dir = FindFirstFileEx(_T("Images\\CustomLayoutIcons\\*"), FindExInfoStandard, 
-		&dirData, FindExSearchNameMatch, NULL, 0);
+	HANDLE dir = FindFirstFileEx(_T("Images\\CustomLayoutIcons\\*"), 
+		FindExInfoStandard, &dirData, FindExSearchNameMatch, NULL, 0);
 
 	if (dir == INVALID_HANDLE_VALUE)
 		return S_UNDEFINED_ERROR;
@@ -866,7 +884,10 @@ Status App::loadCustomLayoutIcons()
 	while (FindNextFile(dir, &dirData) != 0)
 	{
 		tstring fileName = dirData.cFileName;
-		std::transform(fileName.begin(), fileName.end(), fileName.begin(), tolower);
+
+		std::transform(fileName.begin(), fileName.end(), 
+			fileName.begin(), tolower);
+
 		size_t bmpPos = fileName.rfind(_T(".bmp")); 
 		
 		// if not .bmp file
