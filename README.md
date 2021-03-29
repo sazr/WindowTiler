@@ -2,8 +2,6 @@
 
 Quickly arrange your windows using one click/tap.
 
-Download Windows Installer: [Window Tiler Website](http://windowtiler.soribo.com.au "Window Tiler Website")
-
 Screenshots:   
 ![alt text](https://raw.githubusercontent.com/sazr/WindowTiler/master/Markdown_Images/1.png "Eg 1")   
 
